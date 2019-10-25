@@ -229,8 +229,66 @@ stream.declaration.list:
         ;
 
 /*************************************************************************/
-/*                      1.1.3 array ( int a[] )                          */
+/*                      1.1.3 array ( int a[] ) ??                       */
 /*************************************************************************/
+//存疑
+array.declarator:
+                '[' ']'     {
+                                $$=new arrayNode(NULL,@1);
+                            }
+            |   '[' exp ']' {
+                                $$=new arrayNode((expNode*)$2,@1);
+                            }
+            |   array.declarator '[' exp ']'    {
+                                (static_cast<arrayNode*>$1)->arg_list.push_back((expNode*)$3);
+                                $$=$1;
+                            }
+            |   array.declarator '[' ']'    {
+                                yyerror("array declaration with illegal empty dimension\n");
+                                exit(-1);
+                            }
+            ;
+/*************************************************************************/
+/*                      1.1.4 initializer                                */
+/*************************************************************************/
+initializer.opt:
+                /*nothing*/ {
+                                line("Line:%-4d",@$.first_line);
+                                debug ("initializer.opt ::= nothing \n");
+                                $$ = NULL ;
+                            }
+            |   '=' initializer {
+                                line("Line:%-4d",@$.first_line);        
+                                debug("initializer.opt::='=' initializer(%s) \n",$2->toString().c_str());
+                                $$=$2;
+                            }
+            ;
+initializer:
+                '{' initializer.list '}'    {$$=$2;}
+            |   '{' initializer.list ',''}' {$$=$2;} //这个逗号干嘛的？？
+            |   exp                         {$$=$1;}
+            //attention
+            ;
+initializer.list:
+                initializer    { $$=new initNode($1),@1; }
+            |   initializer.list ',' initializer    {
+                                static_cast<initNode*>$1->value.push_back($3);
+                                $$=$1;
+                                }
+            ;
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
