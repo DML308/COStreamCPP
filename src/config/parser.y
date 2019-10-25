@@ -4,6 +4,7 @@
 #include "node.h"
 #include "symbol.h"
 #include "unfoldComposite.h"
+#include <vector>
 SymbolTable *top=new SymbolTable(NULL);
 SymbolTable *saved=top;
 extern SymbolTable S;
@@ -105,6 +106,136 @@ extern void yyerror (const char *msg);
 %locations
 
 %%
+
+/************************************************************************/
+/*              1. 文法一级入口,由下面三种文法组成                           */
+/*                 1.1. declaration 声明                                 */
+/*                 1.2. function.definition 函数声明                      */
+/*                 1.3. composite.definition 数据流计算单元声明             */
+/*************************************************************************/
+prog.start:translation.unit {Program=$1;};
+
+translation.unit:
+            external.definition     {
+                                        line("Line:%-4d",@1.first_line);
+                                        debug("translation.unit::=external.definition\n");
+                                        $$ = new list<Node*>({$1});
+                                    }
+        | translation.unit external.definition  {
+                                                    line("Line:%-4d",@1.first_line);
+                                                    debug("translation.unit::=external.definition\n");
+                                                    $$->push_back($2);
+                                                }
+        ;
+external.definition:
+            declaration             {
+                                        line("Line:%-4d",@1.first_line);
+                                        debug("external.definition::=declaration\n");
+                                        $$=$1;
+                                    }
+        |   function.definition     {
+                                        line("Line:%-4d",@1.first_line);
+                                        debug("external.definition::=function.definition\n");
+                                        $$=$1;
+                                    }
+        |   composite.definition    {   
+                                        line("Line:%-4d",@1.first_line);
+                                        debug("external.definition::=composite.definition\n");
+                                        $$=$1;
+                                    }
+        ;
+/*************************************************************************/
+/*              1.1 declaration 由下面2种文法+2个基础组件组成                */
+/*                      1.1.1 declaring.list                             */
+/*                      1.1.2 stream.declaring.list                      */
+/*                      1.1.3 array                                      */
+/*                      1.1.4 initializer                                */
+/*************************************************************************/
+
+declaration:
+            declaring.list ';'      {
+                                        line("Line:%-4d",@1.first_line); 
+                                        debug("declaration::=declaring.list\n");
+                                        $$=$1;
+                                    }
+        |   stream.declaring.list';'{
+                                        line("Line:%-4d",@1.first_line);
+                                        debug("declaration::=stream.declaring.list\n");
+                                        $$=$1;
+                                    }
+        ;
+declaring.list:
+            type.specifier  idNode  initializer.opt{
+                top->put(static_cast<idNode*>($2)->name,static_cast<idNode*>($2));
+                (static_cast<idNode*>$2)->init=$3;
+                $$=new declareNode((primNode*)$1,(static_cast<idNode*>$2),@2);
+                line("Line:%-4d",@1.first_line);
+                debug("declaring.list::=type.specifier(%s) IDENTIFIER(%s) initializer.opt \n",
+                $1->toString().c_str(),$2->toString().c_str());
+                }
+        ;
+        |   declaring.list  ',' idNode  initializer.opt{
+                top->put(static_cast<idNode*>($3)->name,static_cast<idNode*>($3));
+                (static_cast<idNode*>$3)->init=$4;
+                $$=$1;
+                line("Line:%-4d",@1.first_line);
+                debug("declaring.list::=declaring.list ','IDENTIFIER(%s) initializer.opt \n",($3)->toString().c_str());
+                }
+        ;
+
+/*************************************************************************/
+/*                      1.1.2 stream .declaring.list                     */
+/*                         stream<double x,int y>S;                      */
+/*************************************************************************/
+stream.declaring.list:
+            stream.type.specifier IDENTIFIER    {
+                line("Line:%-4d",@1.first_line);
+                debug("stream.declaring.list::=stream.type.specifier %s \n", $2->c_str());
+                idNode *id=new idNode(*($2),@2);
+                top->put(*($2),id);
+                ((strdclNode*)($1))->id_list.push_back(id);
+                $$=$1;
+            }
+        ;
+            stream.declaring.list ',' IDENTIFIER    {
+                line("Line:%-4d",@1.first_line);
+                debug("stream.declaring.list::=stream.type.specifier %s \n", $3->c_str());
+                idNode *id=new idNode(*($3),@3);
+                top->put(*($3),id);
+                ((strdclNode*)($1))->id_list.push_back(id);
+                $$=$1;
+            }
+        ;
+stream.type.specifier:
+            STREAM '<' stream.declaration.list '>'{
+                line("Line:%-4d",@1.first_line);
+                debug("stream.type.specifier::= STREAM'<'stream.declaration.list(%s) '>' \n",$3->toString().c_str());
+                $$=$3;
+            }
+        ;
+stream.declaration.list:
+            type.specifier idNode   {
+                top->put(static_cast<idNode*>($2)->name,static_cast<idNode*>($2));
+                (static_cast<idNode*>->$2)->valType=(static_cast<primNode*>$1)->name;
+                $$=new strdclNode((idNode*)$2,@1);
+            }
+        ;
+            stream.declaration.list ',' type.specifier idNode{
+                top->put(static_cast<idNode*>($4)->name,static_cast<idNode*>($4));
+                (static_cast<idNode*>->$4)->valType=(static_cast<primNode*>$3)->name;
+                (static_cast<strdclNode*>$1)->id_list.push_back((idNode*)$4);
+                $$=$1;
+            }
+        ;
+
+/*************************************************************************/
+/*                      1.1.3 array ( int a[] )                          */
+/*************************************************************************/
+
+
+
+
+
 
 
 %%
