@@ -25,3 +25,4 @@ src/a
 /Makefile
 *.o
 core
+*.out
